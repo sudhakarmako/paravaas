@@ -1,3 +1,4 @@
+import { Button } from "@/ui";
 import { getProjects } from "@/core/services/projects";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -16,6 +17,7 @@ function App() {
       <Suspense fallback={<div>Loading...</div>}>
         <pre>{JSON.stringify(data, null, 2)}</pre>
       </Suspense>
+      <Button>test</Button>
     </div>
   );
 }
