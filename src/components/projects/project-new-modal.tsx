@@ -15,6 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { createProjectSchema } from "@/core/types/projects";
 import type { CreateProjectInput } from "@/core/types/projects";
 import { createProject, getProjects } from "@/core/services/projects";
+import { PROJECT_DEFAULTS } from "@/core/constants/projects";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { Alert, AlertDescription } from "@/ui";
@@ -28,8 +29,8 @@ export function ProjectNewModal() {
     resolver: zodResolver(createProjectSchema),
     defaultValues: {
       name: "",
-      icon: "Folder",
-      color: "#3B82F6",
+      icon: PROJECT_DEFAULTS.ICON,
+      color: PROJECT_DEFAULTS.COLOR,
     },
   });
 
@@ -43,12 +44,11 @@ export function ProjectNewModal() {
       setErrorMessage(null);
       form.reset({
         name: "",
-        icon: "Folder",
-        color: "#3B82F6",
+        icon: PROJECT_DEFAULTS.ICON,
+        color: PROJECT_DEFAULTS.COLOR,
       });
     },
     onError: (error: Error) => {
-      console.error("Failed to create project:", error);
       const message =
         error.message || "Failed to create project. Please try again.";
       setErrorMessage(message);
@@ -68,8 +68,8 @@ export function ProjectNewModal() {
           setErrorMessage(null);
           form.reset({
             name: "",
-            icon: "Folder",
-            color: "#3B82F6",
+            icon: PROJECT_DEFAULTS.ICON,
+            color: PROJECT_DEFAULTS.COLOR,
           });
         }
       }}

@@ -1,6 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "./api";
-import type { CreateProjectInput, Project } from "@/core/types/projects";
+import type {
+  CreateProjectInput,
+  UpdateProjectInput,
+  Project,
+} from "@/core/types/projects";
 
 const QUERY_KEY = "projects";
 const API_URL = "/projects";
@@ -27,3 +31,24 @@ export const getProject = (id: string | number) =>
     queryKey: [QUERY_KEY, id],
     queryFn: () => api.get(`${API_URL}/${id}`) as Promise<{ project: Project }>,
   });
+
+export const updateProject = {
+  mutationFn: ({
+    id,
+    data,
+  }: {
+    id: string | number;
+    data: UpdateProjectInput;
+  }) =>
+    api.put(`${API_URL}/${id}`, data) as Promise<{
+      project: Project;
+    }>,
+};
+
+export const deleteProject = {
+  mutationFn: (id: string | number) =>
+    api.delete(`${API_URL}/${id}`, undefined) as Promise<{
+      message: string;
+      project: Project;
+    }>,
+};

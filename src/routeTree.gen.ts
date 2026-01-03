@@ -14,6 +14,7 @@ import { Route as ApiProjectsRouteImport } from './routes/api/projects'
 import { Route as ApiProjectsIdRouteImport } from './routes/api/projects/$id'
 import { Route as ProjectsIdLayoutRouteRouteImport } from './routes/projects/$id/_layout/route'
 import { Route as ProjectsIdLayoutWorkflowRouteImport } from './routes/projects/$id/_layout/workflow'
+import { Route as ProjectsIdLayoutSettingsRouteImport } from './routes/projects/$id/_layout/settings'
 import { Route as ProjectsIdLayoutJobsRouteImport } from './routes/projects/$id/_layout/jobs'
 import { Route as ProjectsIdLayoutDatasourceRouteImport } from './routes/projects/$id/_layout/datasource'
 import { Route as ProjectsIdLayoutDashboardRouteImport } from './routes/projects/$id/_layout/dashboard'
@@ -44,6 +45,12 @@ const ProjectsIdLayoutWorkflowRoute =
     path: '/workflow',
     getParentRoute: () => ProjectsIdLayoutRouteRoute,
   } as any)
+const ProjectsIdLayoutSettingsRoute =
+  ProjectsIdLayoutSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => ProjectsIdLayoutRouteRoute,
+  } as any)
 const ProjectsIdLayoutJobsRoute = ProjectsIdLayoutJobsRouteImport.update({
   id: '/jobs',
   path: '/jobs',
@@ -70,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/projects/$id/dashboard': typeof ProjectsIdLayoutDashboardRoute
   '/projects/$id/datasource': typeof ProjectsIdLayoutDatasourceRoute
   '/projects/$id/jobs': typeof ProjectsIdLayoutJobsRoute
+  '/projects/$id/settings': typeof ProjectsIdLayoutSettingsRoute
   '/projects/$id/workflow': typeof ProjectsIdLayoutWorkflowRoute
 }
 export interface FileRoutesByTo {
@@ -80,6 +88,7 @@ export interface FileRoutesByTo {
   '/projects/$id/dashboard': typeof ProjectsIdLayoutDashboardRoute
   '/projects/$id/datasource': typeof ProjectsIdLayoutDatasourceRoute
   '/projects/$id/jobs': typeof ProjectsIdLayoutJobsRoute
+  '/projects/$id/settings': typeof ProjectsIdLayoutSettingsRoute
   '/projects/$id/workflow': typeof ProjectsIdLayoutWorkflowRoute
 }
 export interface FileRoutesById {
@@ -91,6 +100,7 @@ export interface FileRoutesById {
   '/projects/$id/_layout/dashboard': typeof ProjectsIdLayoutDashboardRoute
   '/projects/$id/_layout/datasource': typeof ProjectsIdLayoutDatasourceRoute
   '/projects/$id/_layout/jobs': typeof ProjectsIdLayoutJobsRoute
+  '/projects/$id/_layout/settings': typeof ProjectsIdLayoutSettingsRoute
   '/projects/$id/_layout/workflow': typeof ProjectsIdLayoutWorkflowRoute
 }
 export interface FileRouteTypes {
@@ -103,6 +113,7 @@ export interface FileRouteTypes {
     | '/projects/$id/dashboard'
     | '/projects/$id/datasource'
     | '/projects/$id/jobs'
+    | '/projects/$id/settings'
     | '/projects/$id/workflow'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -113,6 +124,7 @@ export interface FileRouteTypes {
     | '/projects/$id/dashboard'
     | '/projects/$id/datasource'
     | '/projects/$id/jobs'
+    | '/projects/$id/settings'
     | '/projects/$id/workflow'
   id:
     | '__root__'
@@ -123,6 +135,7 @@ export interface FileRouteTypes {
     | '/projects/$id/_layout/dashboard'
     | '/projects/$id/_layout/datasource'
     | '/projects/$id/_layout/jobs'
+    | '/projects/$id/_layout/settings'
     | '/projects/$id/_layout/workflow'
   fileRoutesById: FileRoutesById
 }
@@ -169,6 +182,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsIdLayoutWorkflowRouteImport
       parentRoute: typeof ProjectsIdLayoutRouteRoute
     }
+    '/projects/$id/_layout/settings': {
+      id: '/projects/$id/_layout/settings'
+      path: '/settings'
+      fullPath: '/projects/$id/settings'
+      preLoaderRoute: typeof ProjectsIdLayoutSettingsRouteImport
+      parentRoute: typeof ProjectsIdLayoutRouteRoute
+    }
     '/projects/$id/_layout/jobs': {
       id: '/projects/$id/_layout/jobs'
       path: '/jobs'
@@ -209,6 +229,7 @@ interface ProjectsIdLayoutRouteRouteChildren {
   ProjectsIdLayoutDashboardRoute: typeof ProjectsIdLayoutDashboardRoute
   ProjectsIdLayoutDatasourceRoute: typeof ProjectsIdLayoutDatasourceRoute
   ProjectsIdLayoutJobsRoute: typeof ProjectsIdLayoutJobsRoute
+  ProjectsIdLayoutSettingsRoute: typeof ProjectsIdLayoutSettingsRoute
   ProjectsIdLayoutWorkflowRoute: typeof ProjectsIdLayoutWorkflowRoute
 }
 
@@ -216,6 +237,7 @@ const ProjectsIdLayoutRouteRouteChildren: ProjectsIdLayoutRouteRouteChildren = {
   ProjectsIdLayoutDashboardRoute: ProjectsIdLayoutDashboardRoute,
   ProjectsIdLayoutDatasourceRoute: ProjectsIdLayoutDatasourceRoute,
   ProjectsIdLayoutJobsRoute: ProjectsIdLayoutJobsRoute,
+  ProjectsIdLayoutSettingsRoute: ProjectsIdLayoutSettingsRoute,
   ProjectsIdLayoutWorkflowRoute: ProjectsIdLayoutWorkflowRoute,
 }
 

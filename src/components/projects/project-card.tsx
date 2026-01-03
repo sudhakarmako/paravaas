@@ -6,6 +6,7 @@ import { Pin } from "lucide-react";
 import type { Project } from "@/core/types/projects";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toggleProjectPin } from "@/core/services/projects";
+import { PROJECT_DEFAULTS } from "@/core/constants/projects";
 import { cn } from "@/core/lib/utils";
 
 interface ProjectCardProps {
@@ -37,7 +38,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
         | undefined) || Icons.Folder
     : Icons.Folder;
 
-  const iconColor = project.color || "#3B82F6";
+  const iconColor = project.color || PROJECT_DEFAULTS.COLOR;
 
   return (
     <Link
