@@ -33,9 +33,11 @@ export function ProjectDeleteDialog({
 
   const deleteMutation = useMutation({
     ...deleteProject,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: getProjects.queryKey });
+    onSuccess: () => {
+      // Navigate immediately for better UX
       navigate({ to: "/" });
+      // Invalidate queries in the background (don't await)
+      queryClient.invalidateQueries({ queryKey: getProjects.queryKey });
     },
     onError: (error: Error) => {
       const message =

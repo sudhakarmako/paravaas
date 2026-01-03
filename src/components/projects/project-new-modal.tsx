@@ -36,10 +36,8 @@ export function ProjectNewModal() {
 
   const createProjectMutation = useMutation({
     ...createProject,
-    onSuccess: async () => {
-      // Invalidate and refetch the projects query
-      await queryClient.invalidateQueries({ queryKey: getProjects.queryKey });
-      await queryClient.refetchQueries({ queryKey: getProjects.queryKey });
+    onSuccess: () => {
+      // Close modal immediately
       setIsDialogOpen(false);
       setErrorMessage(null);
       form.reset({
@@ -47,7 +45,9 @@ export function ProjectNewModal() {
         icon: PROJECT_DEFAULTS.ICON,
         color: PROJECT_DEFAULTS.COLOR,
       });
-    },
+      // Invalidate queries in the background (don't await)
+      queryClient.invalidateQueries({ queryKey: getProjects.queryKey });
+      },
     onError: (error: Error) => {
       const message =
         error.message || "Failed to create project. Please try again.";
