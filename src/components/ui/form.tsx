@@ -165,3 +165,12 @@ export {
   FormMessage,
   FormField,
 }
+
+export { default as FormInput } from "./form-input";
+export { default as FormPassword } from "./form-password";
+export { default as FormTextarea } from "./form-textarea";
+export { default as FormDate } from "./form-date";
+export { default as FormSelect } from "./form-select";
+export { default as FormCheckbox } from "./form-checkbox";
+export { default as FormRadio } from "./form-radio";
+export { default as FormIcon } from "./form-icon";
