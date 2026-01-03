@@ -1,4 +1,5 @@
 import { FileSpreadsheetIcon, CalendarIcon, Loader2 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatFileSize, formatDate } from "@/core/lib/format";
@@ -6,6 +7,7 @@ import type { Datasource } from "@/core/types/datasources";
 
 interface DatasourceCardProps {
   datasource: Datasource;
+  projectId: string;
 }
 
 const statusConfig = {
@@ -15,11 +17,12 @@ const statusConfig = {
   failed: { label: "Failed", variant: "destructive" as const },
 };
 
-export function DatasourceCard({ datasource }: DatasourceCardProps) {
+export function DatasourceCard({ datasource, projectId }: DatasourceCardProps) {
   const status = statusConfig[datasource.status];
+  const canNavigate = datasource.status === "completed" && datasource.duckdbTableName;
 
-  return (
-    <Card className="group hover:shadow-md transition-all duration-200 cursor-pointer">
+  const cardContent = (
+    <Card className={`group hover:shadow-md transition-all duration-200 ${canNavigate ? "cursor-pointer" : "cursor-default"}`}>
       <CardHeader className="pb-3">
         <div className="flex items-start gap-3">
           <div className="p-2.5 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors shrink-0">
@@ -60,4 +63,18 @@ export function DatasourceCard({ datasource }: DatasourceCardProps) {
       </CardContent>
     </Card>
   );
+
+  if (canNavigate) {
+    return (
+      <Link
+        to="/projects/$id/datasources/$datasourceId"
+        params={{ id: projectId, datasourceId: datasource.id.toString() }}
+        className="block"
+      >
+        {cardContent}
+      </Link>
+    );
+  }
+
+  return cardContent;
 }

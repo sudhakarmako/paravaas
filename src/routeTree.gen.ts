@@ -13,12 +13,15 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiProjectsRouteImport } from './routes/api/projects'
 import { Route as ApiProjectsIdRouteImport } from './routes/api/projects/$id'
 import { Route as ProjectsIdLayoutRouteRouteImport } from './routes/projects/$id/_layout/route'
+import { Route as ProjectsIdDatasourcesDatasourceIdRouteImport } from './routes/projects/$id/datasources/$datasourceId'
 import { Route as ProjectsIdLayoutWorkflowRouteImport } from './routes/projects/$id/_layout/workflow'
 import { Route as ProjectsIdLayoutSettingsRouteImport } from './routes/projects/$id/_layout/settings'
 import { Route as ProjectsIdLayoutJobsRouteImport } from './routes/projects/$id/_layout/jobs'
 import { Route as ProjectsIdLayoutDatasourceRouteImport } from './routes/projects/$id/_layout/datasource'
 import { Route as ProjectsIdLayoutDashboardRouteImport } from './routes/projects/$id/_layout/dashboard'
 import { Route as ApiProjectsIdDatasourcesRouteImport } from './routes/api/projects/$id/datasources'
+import { Route as ApiProjectsIdDatasourcesDatasourceIdRouteImport } from './routes/api/projects/$id/datasources/$datasourceId'
+import { Route as ApiProjectsIdDatasourcesDatasourceIdDataRouteImport } from './routes/api/projects/$id/datasources/$datasourceId/data'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,6 +43,12 @@ const ProjectsIdLayoutRouteRoute = ProjectsIdLayoutRouteRouteImport.update({
   path: '/projects/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProjectsIdDatasourcesDatasourceIdRoute =
+  ProjectsIdDatasourcesDatasourceIdRouteImport.update({
+    id: '/projects/$id/datasources/$datasourceId',
+    path: '/projects/$id/datasources/$datasourceId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ProjectsIdLayoutWorkflowRoute =
   ProjectsIdLayoutWorkflowRouteImport.update({
     id: '/workflow',
@@ -75,30 +84,48 @@ const ApiProjectsIdDatasourcesRoute =
     path: '/datasources',
     getParentRoute: () => ApiProjectsIdRoute,
   } as any)
+const ApiProjectsIdDatasourcesDatasourceIdRoute =
+  ApiProjectsIdDatasourcesDatasourceIdRouteImport.update({
+    id: '/$datasourceId',
+    path: '/$datasourceId',
+    getParentRoute: () => ApiProjectsIdDatasourcesRoute,
+  } as any)
+const ApiProjectsIdDatasourcesDatasourceIdDataRoute =
+  ApiProjectsIdDatasourcesDatasourceIdDataRouteImport.update({
+    id: '/data',
+    path: '/data',
+    getParentRoute: () => ApiProjectsIdDatasourcesDatasourceIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/projects/$id': typeof ProjectsIdLayoutRouteRouteWithChildren
   '/api/projects/$id': typeof ApiProjectsIdRouteWithChildren
-  '/api/projects/$id/datasources': typeof ApiProjectsIdDatasourcesRoute
+  '/api/projects/$id/datasources': typeof ApiProjectsIdDatasourcesRouteWithChildren
   '/projects/$id/dashboard': typeof ProjectsIdLayoutDashboardRoute
   '/projects/$id/datasource': typeof ProjectsIdLayoutDatasourceRoute
   '/projects/$id/jobs': typeof ProjectsIdLayoutJobsRoute
   '/projects/$id/settings': typeof ProjectsIdLayoutSettingsRoute
   '/projects/$id/workflow': typeof ProjectsIdLayoutWorkflowRoute
+  '/projects/$id/datasources/$datasourceId': typeof ProjectsIdDatasourcesDatasourceIdRoute
+  '/api/projects/$id/datasources/$datasourceId': typeof ApiProjectsIdDatasourcesDatasourceIdRouteWithChildren
+  '/api/projects/$id/datasources/$datasourceId/data': typeof ApiProjectsIdDatasourcesDatasourceIdDataRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/projects/$id': typeof ProjectsIdLayoutRouteRouteWithChildren
   '/api/projects/$id': typeof ApiProjectsIdRouteWithChildren
-  '/api/projects/$id/datasources': typeof ApiProjectsIdDatasourcesRoute
+  '/api/projects/$id/datasources': typeof ApiProjectsIdDatasourcesRouteWithChildren
   '/projects/$id/dashboard': typeof ProjectsIdLayoutDashboardRoute
   '/projects/$id/datasource': typeof ProjectsIdLayoutDatasourceRoute
   '/projects/$id/jobs': typeof ProjectsIdLayoutJobsRoute
   '/projects/$id/settings': typeof ProjectsIdLayoutSettingsRoute
   '/projects/$id/workflow': typeof ProjectsIdLayoutWorkflowRoute
+  '/projects/$id/datasources/$datasourceId': typeof ProjectsIdDatasourcesDatasourceIdRoute
+  '/api/projects/$id/datasources/$datasourceId': typeof ApiProjectsIdDatasourcesDatasourceIdRouteWithChildren
+  '/api/projects/$id/datasources/$datasourceId/data': typeof ApiProjectsIdDatasourcesDatasourceIdDataRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -106,12 +133,15 @@ export interface FileRoutesById {
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/projects/$id/_layout': typeof ProjectsIdLayoutRouteRouteWithChildren
   '/api/projects/$id': typeof ApiProjectsIdRouteWithChildren
-  '/api/projects/$id/datasources': typeof ApiProjectsIdDatasourcesRoute
+  '/api/projects/$id/datasources': typeof ApiProjectsIdDatasourcesRouteWithChildren
   '/projects/$id/_layout/dashboard': typeof ProjectsIdLayoutDashboardRoute
   '/projects/$id/_layout/datasource': typeof ProjectsIdLayoutDatasourceRoute
   '/projects/$id/_layout/jobs': typeof ProjectsIdLayoutJobsRoute
   '/projects/$id/_layout/settings': typeof ProjectsIdLayoutSettingsRoute
   '/projects/$id/_layout/workflow': typeof ProjectsIdLayoutWorkflowRoute
+  '/projects/$id/datasources/$datasourceId': typeof ProjectsIdDatasourcesDatasourceIdRoute
+  '/api/projects/$id/datasources/$datasourceId': typeof ApiProjectsIdDatasourcesDatasourceIdRouteWithChildren
+  '/api/projects/$id/datasources/$datasourceId/data': typeof ApiProjectsIdDatasourcesDatasourceIdDataRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -126,6 +156,9 @@ export interface FileRouteTypes {
     | '/projects/$id/jobs'
     | '/projects/$id/settings'
     | '/projects/$id/workflow'
+    | '/projects/$id/datasources/$datasourceId'
+    | '/api/projects/$id/datasources/$datasourceId'
+    | '/api/projects/$id/datasources/$datasourceId/data'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -138,6 +171,9 @@ export interface FileRouteTypes {
     | '/projects/$id/jobs'
     | '/projects/$id/settings'
     | '/projects/$id/workflow'
+    | '/projects/$id/datasources/$datasourceId'
+    | '/api/projects/$id/datasources/$datasourceId'
+    | '/api/projects/$id/datasources/$datasourceId/data'
   id:
     | '__root__'
     | '/'
@@ -150,12 +186,16 @@ export interface FileRouteTypes {
     | '/projects/$id/_layout/jobs'
     | '/projects/$id/_layout/settings'
     | '/projects/$id/_layout/workflow'
+    | '/projects/$id/datasources/$datasourceId'
+    | '/api/projects/$id/datasources/$datasourceId'
+    | '/api/projects/$id/datasources/$datasourceId/data'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiProjectsRoute: typeof ApiProjectsRouteWithChildren
   ProjectsIdLayoutRouteRoute: typeof ProjectsIdLayoutRouteRouteWithChildren
+  ProjectsIdDatasourcesDatasourceIdRoute: typeof ProjectsIdDatasourcesDatasourceIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -186,6 +226,13 @@ declare module '@tanstack/react-router' {
       path: '/projects/$id'
       fullPath: '/projects/$id'
       preLoaderRoute: typeof ProjectsIdLayoutRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects/$id/datasources/$datasourceId': {
+      id: '/projects/$id/datasources/$datasourceId'
+      path: '/projects/$id/datasources/$datasourceId'
+      fullPath: '/projects/$id/datasources/$datasourceId'
+      preLoaderRoute: typeof ProjectsIdDatasourcesDatasourceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$id/_layout/workflow': {
@@ -230,15 +277,59 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiProjectsIdDatasourcesRouteImport
       parentRoute: typeof ApiProjectsIdRoute
     }
+    '/api/projects/$id/datasources/$datasourceId': {
+      id: '/api/projects/$id/datasources/$datasourceId'
+      path: '/$datasourceId'
+      fullPath: '/api/projects/$id/datasources/$datasourceId'
+      preLoaderRoute: typeof ApiProjectsIdDatasourcesDatasourceIdRouteImport
+      parentRoute: typeof ApiProjectsIdDatasourcesRoute
+    }
+    '/api/projects/$id/datasources/$datasourceId/data': {
+      id: '/api/projects/$id/datasources/$datasourceId/data'
+      path: '/data'
+      fullPath: '/api/projects/$id/datasources/$datasourceId/data'
+      preLoaderRoute: typeof ApiProjectsIdDatasourcesDatasourceIdDataRouteImport
+      parentRoute: typeof ApiProjectsIdDatasourcesDatasourceIdRoute
+    }
   }
 }
 
+interface ApiProjectsIdDatasourcesDatasourceIdRouteChildren {
+  ApiProjectsIdDatasourcesDatasourceIdDataRoute: typeof ApiProjectsIdDatasourcesDatasourceIdDataRoute
+}
+
+const ApiProjectsIdDatasourcesDatasourceIdRouteChildren: ApiProjectsIdDatasourcesDatasourceIdRouteChildren =
+  {
+    ApiProjectsIdDatasourcesDatasourceIdDataRoute:
+      ApiProjectsIdDatasourcesDatasourceIdDataRoute,
+  }
+
+const ApiProjectsIdDatasourcesDatasourceIdRouteWithChildren =
+  ApiProjectsIdDatasourcesDatasourceIdRoute._addFileChildren(
+    ApiProjectsIdDatasourcesDatasourceIdRouteChildren,
+  )
+
+interface ApiProjectsIdDatasourcesRouteChildren {
+  ApiProjectsIdDatasourcesDatasourceIdRoute: typeof ApiProjectsIdDatasourcesDatasourceIdRouteWithChildren
+}
+
+const ApiProjectsIdDatasourcesRouteChildren: ApiProjectsIdDatasourcesRouteChildren =
+  {
+    ApiProjectsIdDatasourcesDatasourceIdRoute:
+      ApiProjectsIdDatasourcesDatasourceIdRouteWithChildren,
+  }
+
+const ApiProjectsIdDatasourcesRouteWithChildren =
+  ApiProjectsIdDatasourcesRoute._addFileChildren(
+    ApiProjectsIdDatasourcesRouteChildren,
+  )
+
 interface ApiProjectsIdRouteChildren {
-  ApiProjectsIdDatasourcesRoute: typeof ApiProjectsIdDatasourcesRoute
+  ApiProjectsIdDatasourcesRoute: typeof ApiProjectsIdDatasourcesRouteWithChildren
 }
 
 const ApiProjectsIdRouteChildren: ApiProjectsIdRouteChildren = {
-  ApiProjectsIdDatasourcesRoute: ApiProjectsIdDatasourcesRoute,
+  ApiProjectsIdDatasourcesRoute: ApiProjectsIdDatasourcesRouteWithChildren,
 }
 
 const ApiProjectsIdRouteWithChildren = ApiProjectsIdRoute._addFileChildren(
@@ -282,6 +373,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiProjectsRoute: ApiProjectsRouteWithChildren,
   ProjectsIdLayoutRouteRoute: ProjectsIdLayoutRouteRouteWithChildren,
+  ProjectsIdDatasourcesDatasourceIdRoute:
+    ProjectsIdDatasourcesDatasourceIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

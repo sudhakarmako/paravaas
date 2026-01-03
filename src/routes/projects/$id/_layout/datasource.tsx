@@ -51,7 +51,7 @@ function DatasourcePage() {
           onUploadClick={() => setIsUploadDialogOpen(true)}
         />
       ) : (
-        <DatasourceList datasources={datasources} />
+        <DatasourceList datasources={datasources} projectId={id} />
       )}
 
       <DatasourceUploadDialog

@@ -25,3 +25,19 @@ export interface UploadFile {
 }
 
 export type FileAcceptConfig = Record<string, string[]>;
+
+export interface DatasourceColumn {
+  name: string;
+  type: string;
+}
+
+export interface DatasourceDataResponse {
+  columns: DatasourceColumn[];
+  data: Record<string, any>[];
+  pagination: {
+    limit: number;
+    offset: number;
+    total: number;
+    hasMore: boolean;
+  };
+}
