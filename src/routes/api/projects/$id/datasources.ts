@@ -104,7 +104,7 @@ export const Route = createFileRoute("/api/projects/$id/datasources")({
           const buffer = Buffer.from(arrayBuffer);
           await writeFile(filePath, buffer);
 
-          // Save metadata to database
+          // Save metadata to database with pending status
           const [datasource] = await db
             .insert(datasourcesTable)
             .values({
@@ -114,8 +114,16 @@ export const Route = createFileRoute("/api/projects/$id/datasources")({
               fileSize: file.size,
               mimeType: file.type || "text/csv",
               uploadedAt: Date.now(),
+              status: "pending",
             })
             .returning();
+
+          // Trigger background import (don't await)
+          import("@/duckdb/import")
+            .then((module) => module.importDatasourceToDuckDB(datasource.id))
+            .catch((error) => {
+              console.error("Background import error:", error);
+            });
 
           return createdResponse({ datasource });
         } catch (error) {

@@ -8,6 +8,7 @@ import {
   DatasourceUploadDialog,
 } from "@/components/datasource";
 import { getDatasources } from "@/core/services/datasources";
+import type { DatasourcesResponse } from "@/core/types/datasources";
 
 export const Route = createFileRoute("/projects/$id/_layout/datasource")({
   component: DatasourcePage,
@@ -18,7 +19,19 @@ function DatasourcePage() {
   const queryClient = useQueryClient();
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
 
-  const { data, isLoading } = useQuery(getDatasources(id));
+  const { data, isLoading } = useQuery({
+    ...getDatasources(id),
+    refetchInterval: (query) => {
+      const data = query.state.data as DatasourcesResponse | undefined;
+      if (data?.datasources) {
+        const hasPendingOrInProgress = data.datasources.some(
+          (ds) => ds.status === "pending" || ds.status === "inprogress"
+        );
+        return hasPendingOrInProgress ? 5000 : false;
+      }
+      return false;
+    },
+  });
   const datasources = data?.datasources || [];
 
   const handleUploadComplete = () => {

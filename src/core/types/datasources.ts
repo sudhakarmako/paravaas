@@ -6,6 +6,8 @@ export interface Datasource {
   fileSize: number;
   mimeType: string;
   uploadedAt: number;
+  status: "pending" | "inprogress" | "completed" | "failed";
+  duckdbTableName: string | null;
 }
 
 export interface DatasourcesResponse {

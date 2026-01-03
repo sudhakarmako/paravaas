@@ -8,6 +8,13 @@
       "when": 1767341088189,
       "tag": "0000_mushy_zarek",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1767452823497,
+      "tag": "0001_gifted_the_captain",
+      "breakpoints": true
     }
   ]
 }

@@ -30,4 +30,9 @@ export const datasourcesTable = sqliteTable("datasource", {
   uploadedAt: int("uploaded_at")
     .notNull()
     .$defaultFn(() => Date.now()),
+  status: text("status")
+    .notNull()
+    .default("pending")
+    .$type<"pending" | "inprogress" | "completed" | "failed">(),
+  duckdbTableName: text("duckdb_table_name"),
 });

@@ -14,6 +14,8 @@ todos.json
 
 #Database
 *.db
+*.duckdb
+*.wal
 
 #Uploads
 uploads/
