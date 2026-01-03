@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { db } from "@/drizzle";
 import { projectsTable } from "@/drizzle/schema";
+import { desc } from "drizzle-orm";
 import {
   successResponse,
   createdResponse,
@@ -16,10 +17,12 @@ export const Route = createFileRoute("/api/projects")({
       // GET - List all projects
       GET: async () => {
         try {
-          const projects = await db.select().from(projectsTable);
+          const projects = await db
+            .select()
+            .from(projectsTable)
+            .orderBy(desc(projectsTable.isPinned), desc(projectsTable.id));
           return successResponse({ projects });
         } catch (error) {
-          console.error(error);
           return internalErrorResponse("Failed to fetch projects");
         }
       },
@@ -27,17 +30,21 @@ export const Route = createFileRoute("/api/projects")({
       POST: async ({ request }) => {
         try {
           const body = await request.json();
-          const { name } = createProjectSchema.parse(body);
+          const { name, icon, color } = createProjectSchema.parse(body);
 
           const [project] = await db
             .insert(projectsTable)
-            .values({ name })
+            .values({
+              name,
+              icon: icon || null,
+              color: color || null,
+              createdAt: Date.now(),
+              isPinned: false,
+            })
             .returning();
 
           return createdResponse({ project });
         } catch (error) {
-          console.error(error);
-
           if (error instanceof ZodError) {
             const errorMessage = error.issues.map((e) => e.message).join(", ");
             return badRequestResponse(errorMessage);

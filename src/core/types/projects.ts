@@ -19,6 +19,8 @@ export const createProjectSchema = z.object({
     .string()
     .min(1, "Name is required and must be a non-empty string")
     .trim(),
+  icon: z.string().optional(),
+  color: z.string().optional(),
 });
 
 /**
@@ -28,7 +30,11 @@ export const updateProjectSchema = z.object({
   name: z
     .string()
     .min(1, "Name is required and must be a non-empty string")
-    .trim(),
+    .trim()
+    .optional(),
+  icon: z.string().optional(),
+  color: z.string().optional(),
+  isPinned: z.boolean().optional(),
 });
 
 /**
@@ -37,6 +43,10 @@ export const updateProjectSchema = z.object({
 export const projectSchema = z.object({
   id: z.number(),
   name: z.string(),
+  createdAt: z.number(),
+  isPinned: z.boolean(),
+  icon: z.string().nullable(),
+  color: z.string().nullable(),
 });
 
 /**

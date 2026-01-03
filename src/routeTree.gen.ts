@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiProjectsRouteImport } from './routes/api/projects'
+import { Route as ProjectsIdDashboardRouteImport } from './routes/projects/$id/dashboard'
 import { Route as ApiProjectsIdRouteImport } from './routes/api/projects/$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const ApiProjectsRoute = ApiProjectsRouteImport.update({
   path: '/api/projects',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProjectsIdDashboardRoute = ProjectsIdDashboardRouteImport.update({
+  id: '/projects/$id/dashboard',
+  path: '/projects/$id/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiProjectsIdRoute = ApiProjectsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -33,29 +39,42 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/api/projects/$id': typeof ApiProjectsIdRoute
+  '/projects/$id/dashboard': typeof ProjectsIdDashboardRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/api/projects/$id': typeof ApiProjectsIdRoute
+  '/projects/$id/dashboard': typeof ProjectsIdDashboardRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/api/projects/$id': typeof ApiProjectsIdRoute
+  '/projects/$id/dashboard': typeof ProjectsIdDashboardRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/projects' | '/api/projects/$id'
+  fullPaths:
+    | '/'
+    | '/api/projects'
+    | '/api/projects/$id'
+    | '/projects/$id/dashboard'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/projects' | '/api/projects/$id'
-  id: '__root__' | '/' | '/api/projects' | '/api/projects/$id'
+  to: '/' | '/api/projects' | '/api/projects/$id' | '/projects/$id/dashboard'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/projects'
+    | '/api/projects/$id'
+    | '/projects/$id/dashboard'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiProjectsRoute: typeof ApiProjectsRouteWithChildren
+  ProjectsIdDashboardRoute: typeof ProjectsIdDashboardRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -72,6 +91,13 @@ declare module '@tanstack/react-router' {
       path: '/api/projects'
       fullPath: '/api/projects'
       preLoaderRoute: typeof ApiProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects/$id/dashboard': {
+      id: '/projects/$id/dashboard'
+      path: '/projects/$id/dashboard'
+      fullPath: '/projects/$id/dashboard'
+      preLoaderRoute: typeof ProjectsIdDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/projects/$id': {
@@ -99,6 +125,7 @@ const ApiProjectsRouteWithChildren = ApiProjectsRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiProjectsRoute: ApiProjectsRouteWithChildren,
+  ProjectsIdDashboardRoute: ProjectsIdDashboardRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
