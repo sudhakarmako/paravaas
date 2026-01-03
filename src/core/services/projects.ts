@@ -21,3 +21,9 @@ export const toggleProjectPin = {
       project: Project;
     }>,
 };
+
+export const getProject = (id: string | number) =>
+  queryOptions({
+    queryKey: [QUERY_KEY, id],
+    queryFn: () => api.get(`${API_URL}/${id}`) as Promise<{ project: Project }>,
+  });
