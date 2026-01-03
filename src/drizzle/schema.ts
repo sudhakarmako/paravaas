@@ -17,3 +17,17 @@ export const projectsTable = sqliteTable("project", {
   icon: text("icon"),
   color: text("color"),
 });
+
+export const datasourcesTable = sqliteTable("datasource", {
+  id: int().primaryKey({ autoIncrement: true }),
+  projectId: int("project_id")
+    .notNull()
+    .references(() => projectsTable.id, { onDelete: "cascade" }),
+  fileName: text("file_name").notNull(),
+  filePath: text("file_path").notNull(),
+  fileSize: int("file_size").notNull(),
+  mimeType: text("mime_type").notNull(),
+  uploadedAt: int("uploaded_at")
+    .notNull()
+    .$defaultFn(() => Date.now()),
+});

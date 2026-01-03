@@ -20,6 +20,7 @@ export * from "./drawer";
 export * from "./dropdown-menu";
 export * from "./empty";
 export * from "./field";
+export * from "./file-upload";
 export * from "./form";
 export * from "./hover-card";
 export * from "./input-group";

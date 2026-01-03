@@ -7,12 +7,12 @@ class Api {
     this.baseUrl = import.meta.env.VITE_API_URL;
   }
 
-  private async request<Payload, Response>(
+  private async request<P, R>(
     url: string,
     method: RequestMethod,
-    data?: Payload,
+    data?: P,
     headers?: RequestHeaders
-  ): Promise<Response> {
+  ): Promise<R> {
     const body = data ? JSON.stringify(data) : undefined;
 
     const response = await fetch(`${this.baseUrl}${url}`, {
@@ -25,31 +25,35 @@ class Api {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: "Unknown error" }));
-      throw new Error(error.error || `HTTP ${response.status}: ${response.statusText}`);
+      const error = await response
+        .json()
+        .catch(() => ({ error: "Unknown error" }));
+      throw new Error(
+        error.error || `HTTP ${response.status}: ${response.statusText}`
+      );
     }
 
-    return response.json() as Promise<Response>;
+    return response.json() as Promise<R>;
   }
 
-  get(url: string) {
-    return this.request(url, "GET");
+  get<P, R>(url: string): Promise<R> {
+    return this.request<P, R>(url, "GET");
   }
 
-  post<Payload>(url: string, data: Payload) {
-    return this.request(url, "POST", data);
+  post<P, R>(url: string, data: P): Promise<R> {
+    return this.request<P, R>(url, "POST", data);
   }
 
-  put<Payload>(url: string, data: Payload) {
-    return this.request(url, "PUT", data);
+  put<P, R>(url: string, data: P): Promise<R> {
+    return this.request<P, R>(url, "PUT", data);
   }
 
-  patch<Payload>(url: string, data: Payload) {
-    return this.request(url, "PATCH", data);
+  patch<P, R>(url: string, data: P): Promise<R> {
+    return this.request<P, R>(url, "PATCH", data);
   }
 
-  delete<Payload>(url: string, data: Payload) {
-    return this.request(url, "DELETE", data);
+  delete<P, R>(url: string, data: P): Promise<R> {
+    return this.request<P, R>(url, "DELETE", data);
   }
 }
 
