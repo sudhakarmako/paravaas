@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { db } from "@/drizzle";
-import { projectsTable } from "@/drizzle/schema";
+import { projectsTable, datasourcesTable } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import {
   successResponse,
@@ -10,6 +10,8 @@ import {
 } from "@/core/lib/response";
 import { projectIdSchema, updateProjectSchema } from "@/core/types/projects";
 import { ZodError } from "zod";
+import { unlink } from "fs/promises";
+import { existsSync } from "fs";
 
 export const Route = createFileRoute("/api/projects/$id")({
   server: {
@@ -108,14 +110,41 @@ export const Route = createFileRoute("/api/projects/$id")({
         try {
           const id = projectIdSchema.parse(params.id);
 
+          // Verify project exists
           const [project] = await db
-            .delete(projectsTable)
+            .select()
+            .from(projectsTable)
             .where(eq(projectsTable.id, id))
-            .returning();
+            .limit(1);
 
           if (!project) {
             return notFoundResponse("Project not found");
           }
+
+          // Fetch all datasources for this project
+          const datasources = await db
+            .select()
+            .from(datasourcesTable)
+            .where(eq(datasourcesTable.projectId, id));
+
+          // Delete all datasource files from disk
+          for (const datasource of datasources) {
+            try {
+              if (datasource.filePath && existsSync(datasource.filePath)) {
+                await unlink(datasource.filePath);
+              }
+            } catch (fileError) {
+              // Log error but continue with deletion
+              // File might already be deleted or not exist
+              console.error(
+                `Failed to delete file ${datasource.filePath}:`,
+                fileError
+              );
+            }
+          }
+
+          // Delete the project (this will cascade delete datasource records)
+          await db.delete(projectsTable).where(eq(projectsTable.id, id));
 
           return successResponse({
             message: "Project deleted successfully",
