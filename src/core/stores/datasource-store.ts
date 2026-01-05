@@ -1,20 +1,24 @@
 import { create } from "zustand";
 import type { DatasourceColumn } from "@/core/types/datasources";
 
-export type RowData = Record<string, any> | null;
+export type RowData = Record<string, any>;
 
 export interface DatasourceState {
-  data: RowData[];
+  // Sparse data storage - Map is shared across renders but row data is appended
+  dataMap: Map<number, RowData>;
   selectedColumns: string[];
   columns: DatasourceColumn[];
   total: number;
+  loadedCount: number;
   isLoading: boolean;
+  loadingBatches: Set<number>;
   loadedBatches: Set<number>;
   error: string | null;
+  // Version counter to trigger re-renders without cloning the whole dataMap
+  version: number;
 }
 
 interface DatasourceStore {
-  // Per-datasource state map
   datasources: Record<string, DatasourceState>;
 
   // Actions
@@ -23,32 +27,34 @@ interface DatasourceStore {
     columns: DatasourceColumn[],
     total: number
   ) => void;
-  setData: (datasourceId: string, data: RowData[]) => void;
   appendBatch: (
     datasourceId: string,
     batchIndex: number,
     data: RowData[],
     offset: number
   ) => void;
+  markBatchLoading: (datasourceId: string, batchIndex: number) => void;
   setSelectedColumns: (datasourceId: string, columns: string[]) => void;
   toggleColumnSelection: (datasourceId: string, columnName: string) => void;
-  selectAllColumns: (datasourceId: string) => void;
-  clearColumnSelection: (datasourceId: string) => void;
   setLoading: (datasourceId: string, isLoading: boolean) => void;
   setError: (datasourceId: string, error: string | null) => void;
-  clearData: (datasourceId: string) => void;
   resetStream: (datasourceId: string) => void;
-  getDatasourceState: (datasourceId: string) => DatasourceState | undefined;
+  getRow: (datasourceId: string, index: number) => RowData | undefined;
+  isBatchLoaded: (datasourceId: string, batchIndex: number) => boolean;
+  isBatchLoading: (datasourceId: string, batchIndex: number) => boolean;
 }
 
 const getDefaultState = (): DatasourceState => ({
-  data: [],
+  dataMap: new Map(),
   selectedColumns: [],
   columns: [],
   total: 0,
+  loadedCount: 0,
   isLoading: false,
+  loadingBatches: new Set(),
   loadedBatches: new Set(),
   error: null,
+  version: 0,
 });
 
 export const useDatasourceStore = create<DatasourceStore>((set, get) => ({
@@ -62,28 +68,9 @@ export const useDatasourceStore = create<DatasourceStore>((set, get) => ({
           ...getDefaultState(),
           columns,
           total,
-          // Initialize data array with nulls for the total size
-          data: new Array(total).fill(null),
         },
       },
     }));
-  },
-
-  setData: (datasourceId, data) => {
-    set((state) => {
-      const existing = state.datasources[datasourceId];
-      if (!existing) return state;
-
-      return {
-        datasources: {
-          ...state.datasources,
-          [datasourceId]: {
-            ...existing,
-            data,
-          },
-        },
-      };
-    });
   },
 
   appendBatch: (datasourceId, batchIndex, batchData, offset) => {
@@ -91,30 +78,47 @@ export const useDatasourceStore = create<DatasourceStore>((set, get) => ({
       const existing = state.datasources[datasourceId];
       if (!existing) return state;
 
-      // Create new data array with batch data inserted
-      const newData = [...existing.data];
-
-      // Ensure array is large enough
-      while (newData.length < offset + batchData.length) {
-        newData.push(null);
-      }
-
-      // Insert batch data at the correct offset
+      // Update the existing map in-place to avoid giant clones
       batchData.forEach((row, idx) => {
-        newData[offset + idx] = row;
+        existing.dataMap.set(offset + idx, row);
       });
 
-      // Track loaded batch
+      // Update version and sets
       const newLoadedBatches = new Set(existing.loadedBatches);
       newLoadedBatches.add(batchIndex);
+
+      const newLoadingBatches = new Set(existing.loadingBatches);
+      newLoadingBatches.delete(batchIndex);
 
       return {
         datasources: {
           ...state.datasources,
           [datasourceId]: {
             ...existing,
-            data: newData,
+            loadedCount: existing.dataMap.size,
             loadedBatches: newLoadedBatches,
+            loadingBatches: newLoadingBatches,
+            version: existing.version + 1,
+          },
+        },
+      };
+    });
+  },
+
+  markBatchLoading: (datasourceId, batchIndex) => {
+    set((state) => {
+      const existing = state.datasources[datasourceId];
+      if (!existing) return state;
+
+      const newLoadingBatches = new Set(existing.loadingBatches);
+      newLoadingBatches.add(batchIndex);
+
+      return {
+        datasources: {
+          ...state.datasources,
+          [datasourceId]: {
+            ...existing,
+            loadingBatches: newLoadingBatches,
           },
         },
       };
@@ -125,14 +129,10 @@ export const useDatasourceStore = create<DatasourceStore>((set, get) => ({
     set((state) => {
       const existing = state.datasources[datasourceId];
       if (!existing) return state;
-
       return {
         datasources: {
           ...state.datasources,
-          [datasourceId]: {
-            ...existing,
-            selectedColumns: columns,
-          },
+          [datasourceId]: { ...existing, selectedColumns: columns },
         },
       };
     });
@@ -142,53 +142,14 @@ export const useDatasourceStore = create<DatasourceStore>((set, get) => ({
     set((state) => {
       const existing = state.datasources[datasourceId];
       if (!existing) return state;
-
       const isSelected = existing.selectedColumns.includes(columnName);
-      const newSelectedColumns = isSelected
+      const newSelected = isSelected
         ? existing.selectedColumns.filter((c) => c !== columnName)
         : [...existing.selectedColumns, columnName];
-
       return {
         datasources: {
           ...state.datasources,
-          [datasourceId]: {
-            ...existing,
-            selectedColumns: newSelectedColumns,
-          },
-        },
-      };
-    });
-  },
-
-  selectAllColumns: (datasourceId) => {
-    set((state) => {
-      const existing = state.datasources[datasourceId];
-      if (!existing) return state;
-
-      return {
-        datasources: {
-          ...state.datasources,
-          [datasourceId]: {
-            ...existing,
-            selectedColumns: existing.columns.map((c) => c.name),
-          },
-        },
-      };
-    });
-  },
-
-  clearColumnSelection: (datasourceId) => {
-    set((state) => {
-      const existing = state.datasources[datasourceId];
-      if (!existing) return state;
-
-      return {
-        datasources: {
-          ...state.datasources,
-          [datasourceId]: {
-            ...existing,
-            selectedColumns: [],
-          },
+          [datasourceId]: { ...existing, selectedColumns: newSelected },
         },
       };
     });
@@ -198,14 +159,10 @@ export const useDatasourceStore = create<DatasourceStore>((set, get) => ({
     set((state) => {
       const existing = state.datasources[datasourceId];
       if (!existing) return state;
-
       return {
         datasources: {
           ...state.datasources,
-          [datasourceId]: {
-            ...existing,
-            isLoading,
-          },
+          [datasourceId]: { ...existing, isLoading },
         },
       };
     });
@@ -215,24 +172,12 @@ export const useDatasourceStore = create<DatasourceStore>((set, get) => ({
     set((state) => {
       const existing = state.datasources[datasourceId];
       if (!existing) return state;
-
       return {
         datasources: {
           ...state.datasources,
-          [datasourceId]: {
-            ...existing,
-            error,
-            isLoading: false,
-          },
+          [datasourceId]: { ...existing, error, isLoading: false },
         },
       };
-    });
-  },
-
-  clearData: (datasourceId) => {
-    set((state) => {
-      const { [datasourceId]: _, ...rest } = state.datasources;
-      return { datasources: rest };
     });
   },
 
@@ -240,51 +185,57 @@ export const useDatasourceStore = create<DatasourceStore>((set, get) => ({
     set((state) => {
       const existing = state.datasources[datasourceId];
       if (!existing) return state;
-
       return {
         datasources: {
           ...state.datasources,
           [datasourceId]: {
             ...existing,
-            data: new Array(existing.total).fill(null),
+            dataMap: new Map(),
+            loadedCount: 0,
             loadedBatches: new Set(),
+            loadingBatches: new Set(),
             isLoading: false,
             error: null,
+            version: 0,
           },
         },
       };
     });
   },
 
-  getDatasourceState: (datasourceId) => {
-    return get().datasources[datasourceId];
+  getRow: (datasourceId, index) => {
+    return get().datasources[datasourceId]?.dataMap.get(index);
+  },
+
+  isBatchLoaded: (datasourceId, batchIndex) => {
+    return (
+      get().datasources[datasourceId]?.loadedBatches.has(batchIndex) ?? false
+    );
+  },
+
+  isBatchLoading: (datasourceId, batchIndex) => {
+    return (
+      get().datasources[datasourceId]?.loadingBatches.has(batchIndex) ?? false
+    );
   },
 }));
 
-// Stable empty defaults to prevent infinite re-renders
-const EMPTY_ARRAY: readonly any[] = [];
-const EMPTY_STRING_ARRAY: readonly string[] = [];
-const EMPTY_SET: ReadonlySet<number> = new Set();
-
-// Selector hooks for performance optimization
-export const useDatasourceData = (datasourceId: string) =>
-  useDatasourceStore(
-    (state) => state.datasources[datasourceId]?.data ?? EMPTY_ARRAY
-  );
-
+// Selectors
 export const useDatasourceColumns = (datasourceId: string) =>
-  useDatasourceStore(
-    (state) => state.datasources[datasourceId]?.columns ?? EMPTY_ARRAY
-  );
+  useDatasourceStore((state) => state.datasources[datasourceId]?.columns ?? []);
 
 export const useDatasourceSelectedColumns = (datasourceId: string) =>
   useDatasourceStore(
-    (state) =>
-      state.datasources[datasourceId]?.selectedColumns ?? EMPTY_STRING_ARRAY
+    (state) => state.datasources[datasourceId]?.selectedColumns ?? []
   );
 
 export const useDatasourceTotal = (datasourceId: string) =>
   useDatasourceStore((state) => state.datasources[datasourceId]?.total ?? 0);
+
+export const useDatasourceLoadedCount = (datasourceId: string) =>
+  useDatasourceStore(
+    (state) => state.datasources[datasourceId]?.loadedCount ?? 0
+  );
 
 export const useDatasourceLoading = (datasourceId: string) =>
   useDatasourceStore(
@@ -294,7 +245,6 @@ export const useDatasourceLoading = (datasourceId: string) =>
 export const useDatasourceError = (datasourceId: string) =>
   useDatasourceStore((state) => state.datasources[datasourceId]?.error ?? null);
 
-export const useDatasourceLoadedBatches = (datasourceId: string) =>
-  useDatasourceStore(
-    (state) => state.datasources[datasourceId]?.loadedBatches ?? EMPTY_SET
-  );
+// Hook to trigger re-render on data change
+export const useDatasourceVersion = (datasourceId: string) =>
+  useDatasourceStore((state) => state.datasources[datasourceId]?.version ?? 0);

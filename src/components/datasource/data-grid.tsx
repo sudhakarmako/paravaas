@@ -1,310 +1,267 @@
-import { useRef, useMemo, useReducer, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useRef, useCallback, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { getDatasourceData } from "@/core/services/datasources";
 import { DATASOURCE_CONSTANTS } from "@/core/constants";
 import {
+  useDatasourceColumns,
+  useDatasourceTotal,
+  useDatasourceLoadedCount,
   useDatasourceSelectedColumns,
+  useDatasourceLoading,
+  useDatasourceError,
   useDatasourceStore,
+  useDatasourceVersion,
 } from "@/core/stores/datasource-store";
-import type { DatasourceColumn } from "@/core/types/datasources";
 import { cn } from "@/core/lib/utils";
+import { loadBatch } from "@/core/services/datasource-stream";
+import { Loader2 } from "lucide-react";
 
 interface DataGridProps {
   projectId: string;
   datasourceId: string;
-  columns: DatasourceColumn[];
-  total: number;
 }
 
-const {
-  ROW_HEIGHT,
-  BATCH_SIZE,
-  ROW_NUMBER_WIDTH,
-  COLUMN_WIDTH,
-  OVERSCAN_ROWS,
-} = DATASOURCE_CONSTANTS;
+const ROW_HEIGHT = 36;
+const HEADER_HEIGHT = 40;
+const ROW_NUMBER_WIDTH = 64;
+const MIN_COLUMN_WIDTH = 120;
+const BATCH_SIZE = DATASOURCE_CONSTANTS.BATCH_SIZE;
 
-type RowData = Record<string, any>;
-type RowStore = Map<number, RowData>;
-
-export function DataGrid({
-  projectId,
-  datasourceId,
-  columns,
-  total,
-}: DataGridProps) {
-  const queryClient = useQueryClient();
+export function DataGrid({ projectId, datasourceId }: DataGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const streamStartedRef = useRef(false);
 
-  // Column selection from zustand store
+  // Read from zustand store
+  const columns = useDatasourceColumns(datasourceId);
+  const total = useDatasourceTotal(datasourceId);
+  const loadedCount = useDatasourceLoadedCount(datasourceId);
   const selectedColumns = useDatasourceSelectedColumns(datasourceId);
-  const { toggleColumnSelection } = useDatasourceStore();
+  const isLoading = useDatasourceLoading(datasourceId);
+  const error = useDatasourceError(datasourceId);
+  // Important: subscription to version triggers re-renders when data arrives
+  useDatasourceVersion(datasourceId);
 
-  /* ------------------ DATA STORE (SPARSE) ------------------ */
+  const store = useDatasourceStore();
 
-  // Sparse data store - loads on-demand as user scrolls
-  const dataRef = useRef<RowStore>(new Map());
-  const loadingBatches = useRef<Set<number>>(new Set());
-  const loadedBatches = useRef<Set<number>>(new Set());
+  // Load chunk on demand
+  const loadChunk = useCallback(
+    (startRow: number, endRow: number) => {
+      const startBatch = Math.floor(startRow / BATCH_SIZE);
+      const endBatch = Math.floor(endRow / BATCH_SIZE);
 
-  // Force render using reducer instead of state to avoid array cloning
-  const [, forceRender] = useReducer((x) => x + 1, 0);
+      for (let batch = startBatch; batch <= endBatch; batch++) {
+        if (
+          !store.isBatchLoaded(datasourceId, batch) &&
+          !store.isBatchLoading(datasourceId, batch)
+        ) {
+          store.markBatchLoading(datasourceId, batch);
+          loadBatch(projectId, datasourceId, batch).catch((err) => {
+            console.error(`Failed to load batch ${batch}:`, err);
+          });
+        }
+      }
+    },
+    [datasourceId, store, projectId]
+  );
 
-  /* ------------------ DIMENSIONS ------------------ */
+  // Start initial data fetch
+  useEffect(() => {
+    if (streamStartedRef.current) return;
+    streamStartedRef.current = true;
 
-  const columnCount = columns.length + 1; // +1 for row number column
-  const totalWidth = ROW_NUMBER_WIDTH + columns.length * COLUMN_WIDTH;
+    const fetchData = async () => {
+      store.setLoading(datasourceId, true);
+      try {
+        const response = await fetch(
+          `/api/projects/${projectId}/datasources/${datasourceId}/data?limit=1000&offset=0`
+        );
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const result = await response.json();
 
-  /* ------------------ ROW VIRTUALIZATION ------------------ */
+        if (result && result.columns && result.data) {
+          store.initializeDatasource(
+            datasourceId,
+            result.columns,
+            result.pagination.total
+          );
+          store.appendBatch(datasourceId, 0, result.data, 0);
+          store.setLoading(datasourceId, false);
+        }
+      } catch (err) {
+        store.setError(
+          datasourceId,
+          err instanceof Error ? err.message : String(err)
+        );
+      }
+    };
+
+    fetchData();
+  }, [projectId, datasourceId, store]);
+
+  const getColumnWidth = useCallback(() => {
+    if (!containerRef.current || columns.length === 0) return MIN_COLUMN_WIDTH;
+    const availableWidth = containerRef.current.clientWidth - ROW_NUMBER_WIDTH;
+    return Math.max(
+      Math.floor(availableWidth / columns.length),
+      MIN_COLUMN_WIDTH
+    );
+  }, [columns.length]);
+
+  const columnWidth = getColumnWidth();
+  const totalWidth = ROW_NUMBER_WIDTH + columns.length * columnWidth;
 
   const rowVirtualizer = useVirtualizer({
     count: total,
     getScrollElement: () => containerRef.current,
     estimateSize: () => ROW_HEIGHT,
-    overscan: OVERSCAN_ROWS,
-  });
-
-  const virtualRows = rowVirtualizer.getVirtualItems();
-
-  /* ------------------ COLUMN VIRTUALIZATION ------------------ */
-
-  const columnVirtualizer = useVirtualizer({
-    horizontal: true,
-    count: columnCount,
-    getScrollElement: () => containerRef.current,
-    estimateSize: (index) => (index === 0 ? ROW_NUMBER_WIDTH : COLUMN_WIDTH),
-    overscan: 3,
-  });
-
-  const virtualColumns = columnVirtualizer.getVirtualItems();
-
-  /* ------------------ BATCH LOADER ------------------ */
-
-  const loadBatch = useCallback(
-    async (batchIndex: number) => {
-      if (
-        loadedBatches.current.has(batchIndex) ||
-        loadingBatches.current.has(batchIndex)
-      ) {
-        return;
-      }
-
-      const offset = batchIndex * BATCH_SIZE;
-      if (offset >= total) return;
-
-      loadingBatches.current.add(batchIndex);
-
-      try {
-        const limit = Math.min(BATCH_SIZE, total - offset);
-
-        const result = await queryClient.fetchQuery(
-          getDatasourceData(projectId, datasourceId, limit, offset)
+    overscan: 20,
+    onChange: (instance) => {
+      const items = instance.getVirtualItems();
+      if (items.length > 0) {
+        const bufferStart = Math.max(0, items[0].index - 50);
+        const bufferEnd = Math.min(
+          total - 1,
+          items[items.length - 1].index + 50
         );
-
-        result.data.forEach((row, i) => {
-          dataRef.current.set(offset + i, row);
-        });
-
-        loadedBatches.current.add(batchIndex);
-        forceRender();
-      } catch (err) {
-        console.error("Batch load failed", err);
-      } finally {
-        loadingBatches.current.delete(batchIndex);
+        loadChunk(bufferStart, bufferEnd);
       }
     },
-    [queryClient, projectId, datasourceId, total]
-  );
+  });
 
-  /* ------------------ LOAD VISIBLE BATCHES (during render) ------------------ */
-
-  // Trigger batch loading synchronously during render
-  // This replaces the useEffect pattern and is safe because loadBatch
-  // guards against duplicate loading with refs
-  if (virtualRows.length > 0) {
-    const start = virtualRows[0].index;
-    const end = virtualRows[virtualRows.length - 1].index;
-
-    const startBatch = Math.floor(start / BATCH_SIZE);
-    const endBatch = Math.floor(end / BATCH_SIZE);
-
-    // Load visible batches
-    for (let b = startBatch; b <= endBatch; b++) {
-      loadBatch(b);
-    }
-
-    // Prefetch next batch
-    const nextBatch = endBatch + 1;
-    if (nextBatch * BATCH_SIZE < total) {
-      loadBatch(nextBatch);
-    }
-  }
-
-  /* ------------------ COLUMN CLICK HANDLER ------------------ */
-
-  const handleColumnHeaderClick = useCallback(
-    (columnName: string) => {
-      toggleColumnSelection(datasourceId, columnName);
-    },
-    [datasourceId, toggleColumnSelection]
-  );
-
-  /* ------------------ HEADER ROW ------------------ */
-
-  const headerRow = useMemo(() => {
+  if (error)
     return (
-      <div
-        className="sticky top-0 z-30 bg-muted border-b"
-        style={{
-          height: ROW_HEIGHT,
-          width: totalWidth,
-          position: "relative",
-        }}
-      >
-        {virtualColumns.map((vCol) => {
-          const colIndex = vCol.index;
-
-          // Row number header
-          if (colIndex === 0) {
-            return (
-              <div
-                key="rownum-header"
-                className="absolute left-0 top-0 border-r bg-muted px-2 py-1.5 text-xs font-semibold text-muted-foreground text-center flex items-center justify-center"
-                style={{
-                  width: ROW_NUMBER_WIDTH,
-                  height: ROW_HEIGHT,
-                  zIndex: 40,
-                  boxShadow: "2px 0 4px rgba(0,0,0,0.1)",
-                }}
-              >
-                #
-              </div>
-            );
-          }
-
-          // Data column header
-          const column = columns[colIndex - 1];
-          const isSelected = selectedColumns.includes(column.name);
-
-          return (
-            <div
-              key={column.name}
-              onClick={() => handleColumnHeaderClick(column.name)}
-              className={cn(
-                "absolute top-0 border-r px-2 py-1.5 text-xs font-semibold truncate flex items-center cursor-pointer transition-colors select-none",
-                isSelected
-                  ? "bg-primary/20 text-primary border-primary/30"
-                  : "text-muted-foreground hover:bg-muted/80"
-              )}
-              style={{
-                left: vCol.start,
-                width: COLUMN_WIDTH,
-                height: ROW_HEIGHT,
-              }}
-              title={`Click to ${isSelected ? "deselect" : "select"} column: ${column.name}`}
-            >
-              {column.name}
-            </div>
-          );
-        })}
+      <div className="flex flex-col items-center justify-center h-full text-destructive p-4">
+        <p className="font-medium">Error loading data</p>
+        <p className="text-sm opacity-80">{error}</p>
       </div>
     );
-  }, [
-    virtualColumns,
-    columns,
-    totalWidth,
-    selectedColumns,
-    handleColumnHeaderClick,
-  ]);
 
-  /* ------------------ RENDER ------------------ */
+  if (columns.length === 0)
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <p className="text-sm">Loading metadata...</p>
+      </div>
+    );
 
   return (
-    <div
-      ref={containerRef}
-      className="relative h-full overflow-auto bg-background"
-    >
-      {/* Scroll container */}
+    <div className="h-full flex flex-col bg-background overflow-hidden">
+      {/* Fixed Header */}
       <div
-        style={{
-          height: rowVirtualizer.getTotalSize(),
-          width: columnVirtualizer.getTotalSize(),
-          position: "relative",
-        }}
+        className="shrink-0 border-b border-border bg-muted/50 overflow-hidden"
+        style={{ height: HEADER_HEIGHT }}
       >
-        {/* Header */}
-        {headerRow}
-
-        {/* Rows */}
-        {virtualRows.map((vRow) => {
-          const rowIndex = vRow.index;
-          const rowData = dataRef.current.get(rowIndex);
-          const hasData = rowData != null;
-
-          return (
-            <div
-              key={rowIndex}
-              className={`absolute border-b ${
-                hasData ? "hover:bg-muted/50" : "bg-muted/20"
-              }`}
-              style={{
-                transform: `translateY(${vRow.start + ROW_HEIGHT}px)`,
-                height: ROW_HEIGHT,
-                width: totalWidth,
-              }}
-            >
-              {virtualColumns.map((vCol) => {
-                const colIndex = vCol.index;
-
-                /* Row number column */
-                if (colIndex === 0) {
+        <div className="flex h-full" style={{ width: totalWidth }}>
+          <div
+            className="shrink-0 flex items-center justify-center border-r border-border bg-muted font-medium text-xs text-muted-foreground"
+            style={{ width: ROW_NUMBER_WIDTH }}
+          >
+            #
+          </div>
+          {columns.map((column) => {
+            const isSelected = selectedColumns.includes(column.name);
+            return (
+              <div
+                key={column.name}
+                onClick={() =>
+                  store.toggleColumnSelection(datasourceId, column.name)
+                }
+                className={cn(
+                  "shrink-0 flex items-center px-3 border-r border-border cursor-pointer select-none font-medium text-xs truncate transition-colors",
+                  isSelected
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:bg-muted"
+                )}
+                style={{ width: columnWidth }}
+              >
+                {column.name}
+              </div>
+            );
+          })}
+        </div>
+      </div>;
+      {
+        /* Loading bar */
+      }
+      {
+        /* {
+        (isLoading || loadedCount < total) && (
+          <div className="shrink-0 px-3 py-1 bg-muted/30 border-b border-border text-[10px] text-muted-foreground flex items-center gap-2">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>
+              {loadedCount > 0
+                ? `Loaded ${loadedCount.toLocaleString()} of ${total.toLocaleString()} rows`
+                : "Connecting..."}
+            </span>
+          </div>
+        );
+      } */
+      }
+      {
+        /* Body */
+      }
+      <div ref={containerRef} className="flex-1 overflow-auto">
+        <div
+          style={{
+            height: rowVirtualizer.getTotalSize(),
+            width: totalWidth,
+            position: "relative",
+          }}
+        >
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const rowData = store.getRow(datasourceId, virtualRow.index);
+            const isEven = virtualRow.index % 2 === 0;
+            return (
+              <div
+                key={virtualRow.key}
+                className={cn(
+                  "absolute left-0 right-0 flex border-b border-border/50",
+                  isEven ? "bg-background" : "bg-muted/10",
+                  rowData && "hover:bg-accent/30"
+                )}
+                style={{
+                  top: virtualRow.start,
+                  height: ROW_HEIGHT,
+                  width: totalWidth,
+                }}
+              >
+                <div
+                  className="shrink-0 flex items-center justify-center border-r border-border/50 text-[10px] text-muted-foreground font-mono bg-muted/20"
+                  style={{ width: ROW_NUMBER_WIDTH }}
+                >
+                  {virtualRow.index + 1}
+                </div>
+                {columns.map((column) => {
+                  const val = rowData?.[column.name];
                   return (
                     <div
-                      key="rownum"
-                      className="absolute left-0 top-0 border-r bg-muted text-center text-xs text-muted-foreground flex items-center justify-center"
-                      style={{
-                        width: ROW_NUMBER_WIDTH,
-                        height: ROW_HEIGHT,
-                        zIndex: 20,
-                        boxShadow: "2px 0 4px rgba(0,0,0,0.1)",
-                      }}
+                      key={column.name}
+                      className={cn(
+                        "shrink-0 flex items-center px-3 border-r border-border/50 text-sm truncate",
+                        selectedColumns.includes(column.name) && "bg-primary/5"
+                      )}
+                      style={{ width: columnWidth }}
                     >
-                      {rowIndex + 1}
+                      {rowData ? (
+                        val !== null && val !== undefined ? (
+                          String(val)
+                        ) : (
+                          <span className="text-muted-foreground/30 italic text-xs">
+                            null
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-muted-foreground/20 animate-pulse">
+                          ···
+                        </span>
+                      )}
                     </div>
                   );
-                }
-
-                /* Data column */
-                const column = columns[colIndex - 1];
-                const value = rowData?.[column.name];
-                const isSelected = selectedColumns.includes(column.name);
-
-                return (
-                  <div
-                    key={column.name}
-                    className={cn(
-                      "absolute top-0 border-r px-2 truncate text-sm flex items-center",
-                      isSelected && "bg-primary/5"
-                    )}
-                    style={{
-                      left: vCol.start,
-                      width: COLUMN_WIDTH,
-                      height: ROW_HEIGHT,
-                    }}
-                  >
-                    {value != null ? (
-                      String(value)
-                    ) : (
-                      <span className="text-muted-foreground text-xs">…</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-      </div>
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>;
     </div>
   );
 }

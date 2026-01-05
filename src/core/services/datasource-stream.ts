@@ -72,7 +72,7 @@ export async function streamDatasourceData(
   activeStreams.set(dsId, abortController);
 
   const {
-    limit = DATASOURCE_CONSTANTS.MAX_BATCH_SIZE,
+    limit = 1000, // Load 1000 rows initially
     offset = 0,
     onMetadata,
     onBatch,
@@ -219,8 +219,11 @@ export async function loadBatch(
     return;
   }
 
-  // Check if batch is already loaded
-  if (state.loadedBatches.has(batchIndex)) {
+  // Check if batch is already loaded or loading
+  if (
+    state.loadedBatches.has(batchIndex) ||
+    state.loadingBatches.has(batchIndex)
+  ) {
     return;
   }
 
@@ -250,7 +253,6 @@ export async function loadBatch(
 
 /**
  * Reset stream and clear data for a datasource
- * Call this after computations/transformations
  */
 export function resetDatasourceStream(datasourceId: string): void {
   abortDatasourceStream(datasourceId);
@@ -266,4 +268,3 @@ export function cleanupDatasource(datasourceId: string): void {
   const store = useDatasourceStore.getState();
   store.clearData(datasourceId);
 }
-

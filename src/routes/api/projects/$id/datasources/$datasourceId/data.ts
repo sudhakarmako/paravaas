@@ -8,7 +8,7 @@ import {
   internalErrorResponse,
   successResponse,
 } from "@/core/lib/response";
-import { query } from "@/duckdb";
+import { query, ensureTableFromCSV } from "@/duckdb";
 import { ZodError, z } from "zod";
 import { DATASOURCE_CONSTANTS } from "@/core/constants";
 
@@ -134,20 +134,15 @@ export const Route = createFileRoute(
             return notFoundResponse("Datasource not found");
           }
 
-          if (
-            datasource.status !== "completed" ||
-            !datasource.duckdbTableName
-          ) {
-            return badRequestResponse(
-              "Datasource is not ready. Status: " + datasource.status
-            );
+          if (!datasource.filePath) {
+            return badRequestResponse("Datasource file path not found");
           }
 
-          const tableName = datasource.duckdbTableName;
-          if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
-            console.error("Invalid table name format:", tableName);
-            return badRequestResponse("Invalid table name format");
-          }
+          // Table name for this datasource
+          const tableName = `datasource_${datasourceId}`;
+
+          // Ensure table exists in memory (loads from CSV if needed)
+          await ensureTableFromCSV(tableName, datasource.filePath);
 
           // Get columns and total count
           const columns = await getTableColumns(tableName);
