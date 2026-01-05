@@ -3,10 +3,10 @@ import { db } from "@/drizzle";
 import { datasourcesTable } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import {
-  successResponse,
   notFoundResponse,
   badRequestResponse,
   internalErrorResponse,
+  successResponse,
 } from "@/core/lib/response";
 import { query } from "@/duckdb";
 import { ZodError, z } from "zod";
@@ -19,7 +19,83 @@ const querySchema = z.object({
     .max(DATASOURCE_CONSTANTS.MAX_BATCH_SIZE)
     .default(DATASOURCE_CONSTANTS.DEFAULT_LIMIT),
   offset: z.coerce.number().min(0).default(0),
+  stream: z
+    .string()
+    .transform((val) => val === "true")
+    .default("false"),
 });
+
+// Helper function to convert BigInt and other non-serializable values
+const serializeValue = (value: any): any => {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "object" && value.constructor === Object) {
+    const result: Record<string, any> = {};
+    for (const [key, val] of Object.entries(value)) {
+      result[key] = serializeValue(val);
+    }
+    return result;
+  }
+  return value;
+};
+
+// Get column information from table
+async function getTableColumns(tableName: string) {
+  let columns: Array<{ column_name: string; column_type: string }> = [];
+
+  const firstRow = await query(`SELECT * FROM ${tableName} LIMIT 1`);
+
+  if (firstRow.length > 0) {
+    columns = Object.keys(firstRow[0]).map((key) => ({
+      column_name: key,
+      column_type: "VARCHAR",
+    }));
+  } else {
+    try {
+      const describeResult = await query(`DESCRIBE ${tableName}`);
+      if (describeResult && describeResult.length > 0) {
+        const firstDescRow = describeResult[0] as any;
+        const keys = Object.keys(firstDescRow);
+
+        const nameKey = keys.find(
+          (k) =>
+            ["column_name", "name", "field", "Column"].includes(k) ||
+            k.toLowerCase().includes("name")
+        );
+        const typeKey = keys.find(
+          (k) =>
+            ["column_type", "type", "data_type", "Type"].includes(k) ||
+            k.toLowerCase().includes("type")
+        );
+
+        columns = describeResult.map((col: any) => ({
+          column_name: nameKey ? col[nameKey] : col[keys[0]] || "",
+          column_type: typeKey ? col[typeKey] : "VARCHAR",
+        }));
+      }
+    } catch (describeError) {
+      console.warn("DESCRIBE failed:", describeError);
+    }
+  }
+
+  return columns;
+}
+
+// Get total count from table
+async function getTableCount(tableName: string): Promise<number> {
+  const countResult = await query<{ count: number | bigint }>(
+    `SELECT COUNT(*) as count FROM ${tableName}`
+  );
+  const countValue = countResult[0]?.count;
+  if (typeof countValue === "bigint") {
+    return Number(countValue);
+  }
+  return countValue || 0;
+}
 
 export const Route = createFileRoute(
   "/api/projects/$id/datasources/$datasourceId/data"
@@ -30,27 +106,18 @@ export const Route = createFileRoute(
         const { id, datasourceId } = params;
 
         try {
-          // Safely parse URL and query parameters
-          let limit: number = DATASOURCE_CONSTANTS.DEFAULT_LIMIT;
-          let offset = 0;
+          // Parse URL and query parameters
+          const url = new URL(request.url);
+          const queryParams = {
+            limit:
+              url.searchParams.get("limit") ||
+              String(DATASOURCE_CONSTANTS.DEFAULT_LIMIT),
+            offset: url.searchParams.get("offset") || "0",
+            stream: url.searchParams.get("stream") || "false",
+          };
 
-          try {
-            const url = new URL(request.url);
-            const queryParams = {
-              limit:
-                url.searchParams.get("limit") ||
-                String(DATASOURCE_CONSTANTS.DEFAULT_LIMIT),
-              offset: url.searchParams.get("offset") || "0",
-            };
-            const parsed = querySchema.parse(queryParams);
-            limit = parsed.limit;
-            offset = parsed.offset;
-          } catch (urlError) {
-            console.warn(
-              "Failed to parse URL or query params, using defaults:",
-              urlError
-            );
-          }
+          const parsed = querySchema.parse(queryParams);
+          const { limit, offset, stream } = parsed;
 
           // Get datasource
           const [datasource] = await db
@@ -63,12 +130,10 @@ export const Route = createFileRoute(
             return notFoundResponse("Datasource not found");
           }
 
-          // Verify it belongs to the project
           if (datasource.projectId !== parseInt(id)) {
             return notFoundResponse("Datasource not found");
           }
 
-          // Check if datasource is ready
           if (
             datasource.status !== "completed" ||
             !datasource.duckdbTableName
@@ -78,144 +143,128 @@ export const Route = createFileRoute(
             );
           }
 
-          // Validate table name
           const tableName = datasource.duckdbTableName;
           if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
             console.error("Invalid table name format:", tableName);
             return badRequestResponse("Invalid table name format");
           }
 
-          // Get column information by inferring from first row
-          let columns: Array<{ column_name: string; column_type: string }> = [];
+          // Get columns and total count
+          const columns = await getTableColumns(tableName);
+          const total = await getTableCount(tableName);
 
-          try {
-            // Get first row to infer column names
-            const firstRow = await query(`SELECT * FROM ${tableName} LIMIT 1`);
-
-            if (firstRow.length > 0) {
-              // Extract column names from the first row
-              columns = Object.keys(firstRow[0]).map((key) => ({
-                column_name: key,
-                column_type: "VARCHAR",
-              }));
-            } else {
-              // Table exists but is empty - try to get column info from schema
-              try {
-                const describeResult = await query(`DESCRIBE ${tableName}`);
-                if (describeResult && describeResult.length > 0) {
-                  // Handle various DESCRIBE output formats
-                  const firstDescRow = describeResult[0] as any;
-                  const keys = Object.keys(firstDescRow);
-
-                  // Find column name and type keys
-                  const nameKey = keys.find(
-                    (k) =>
-                      ["column_name", "name", "field", "Column"].includes(k) ||
-                      k.toLowerCase().includes("name")
-                  );
-                  const typeKey = keys.find(
-                    (k) =>
-                      ["column_type", "type", "data_type", "Type"].includes(
-                        k
-                      ) || k.toLowerCase().includes("type")
-                  );
-
-                  columns = describeResult.map((col: any) => ({
-                    column_name: nameKey ? col[nameKey] : col[keys[0]] || "",
-                    column_type: typeKey ? col[typeKey] : "VARCHAR",
-                  }));
-                }
-              } catch (describeError) {
-                console.warn("DESCRIBE failed:", describeError);
-              }
-            }
-          } catch (error) {
-            console.error("Failed to get column information:", error);
-            throw new Error(
-              `Could not determine table columns: ${
-                error instanceof Error ? error.message : String(error)
-              }`
-            );
-          }
-
-          // Handle empty table case - return empty data with columns if we have them
           if (columns.length === 0) {
-            // Return empty response for truly empty tables
             return successResponse({
               columns: [],
               data: [],
-              pagination: {
-                limit,
-                offset,
-                total: 0,
-                hasMore: false,
+              pagination: { limit, offset, total: 0, hasMore: false },
+            });
+          }
+
+          // If streaming is requested, return NDJSON stream
+          if (stream) {
+            const encoder = new TextEncoder();
+            const batchSize = DATASOURCE_CONSTANTS.BATCH_SIZE;
+
+            const readableStream = new ReadableStream({
+              async start(controller) {
+                try {
+                  // Send metadata as first line
+                  const metadata = {
+                    type: "metadata",
+                    columns: columns.map((col) => ({
+                      name: col.column_name,
+                      type: col.column_type,
+                    })),
+                    total,
+                    batchSize,
+                  };
+                  controller.enqueue(
+                    encoder.encode(JSON.stringify(metadata) + "\n")
+                  );
+
+                  // Stream data in batches
+                  let currentOffset = offset;
+                  let remaining = limit;
+
+                  while (remaining > 0 && currentOffset < total) {
+                    const batchLimit = Math.min(batchSize, remaining);
+
+                    const rawData = await query(
+                      `SELECT * FROM ${tableName} LIMIT ${batchLimit} OFFSET ${currentOffset}`
+                    );
+
+                    if (rawData.length === 0) break;
+
+                    const serializedData = rawData.map((row) => {
+                      const serializedRow: Record<string, any> = {};
+                      for (const [key, value] of Object.entries(row)) {
+                        serializedRow[key] = serializeValue(value);
+                      }
+                      return serializedRow;
+                    });
+
+                    // Send batch as a single line
+                    const batch = {
+                      type: "batch",
+                      offset: currentOffset,
+                      data: serializedData,
+                    };
+                    controller.enqueue(
+                      encoder.encode(JSON.stringify(batch) + "\n")
+                    );
+
+                    currentOffset += rawData.length;
+                    remaining -= rawData.length;
+                  }
+
+                  // Send completion message
+                  const complete = {
+                    type: "complete",
+                    totalLoaded: currentOffset - offset,
+                  };
+                  controller.enqueue(
+                    encoder.encode(JSON.stringify(complete) + "\n")
+                  );
+
+                  controller.close();
+                } catch (error) {
+                  const errorMessage =
+                    error instanceof Error ? error.message : String(error);
+                  const errorPayload = { type: "error", error: errorMessage };
+                  controller.enqueue(
+                    encoder.encode(JSON.stringify(errorPayload) + "\n")
+                  );
+                  controller.close();
+                }
+              },
+            });
+
+            return new Response(readableStream, {
+              headers: {
+                "Content-Type": "application/x-ndjson",
+                "Transfer-Encoding": "chunked",
+                "Cache-Control": "no-cache",
+                Connection: "keep-alive",
               },
             });
           }
 
-          // Helper function to convert BigInt and other non-serializable values
-          const serializeValue = (value: any): any => {
-            if (typeof value === "bigint") {
-              // Convert BigInt to string to avoid serialization issues
-              return value.toString();
-            }
-            if (value === null || value === undefined) {
-              return null;
-            }
-            if (typeof value === "object" && value.constructor === Object) {
-              // Recursively handle objects
-              const result: Record<string, any> = {};
-              for (const [key, val] of Object.entries(value)) {
-                result[key] = serializeValue(val);
-              }
-              return result;
-            }
-            return value;
-          };
+          // Non-streaming: return regular JSON response
+          const rawData = await query(
+            `SELECT * FROM ${tableName} LIMIT ${limit} OFFSET ${offset}`
+          );
 
-          // Get data
-          let data: Record<string, any>[] = [];
-          try {
-            const rawData = await query(
-              `SELECT * FROM ${tableName} LIMIT ${limit} OFFSET ${offset}`
-            );
-            // Serialize BigInt values to strings
-            data = rawData.map((row) => {
-              const serializedRow: Record<string, any> = {};
-              for (const [key, value] of Object.entries(row)) {
-                serializedRow[key] = serializeValue(value);
-              }
-              return serializedRow;
-            });
-          } catch (queryError) {
-            console.error("Failed to query data:", queryError);
-            throw new Error(
-              `Failed to query table data: ${
-                queryError instanceof Error
-                  ? queryError.message
-                  : String(queryError)
-              }`
-            );
-          }
-
-          // Get total count
-          let total = 0;
-          try {
-            const countResult = await query<{ count: number | bigint }>(
-              `SELECT COUNT(*) as count FROM ${tableName}`
-            );
-            const countValue = countResult[0]?.count;
-            if (typeof countValue === "bigint") {
-              total = Number(countValue);
-            } else {
-              total = countValue || 0;
+          const data = rawData.map((row) => {
+            const serializedRow: Record<string, any> = {};
+            for (const [key, value] of Object.entries(row)) {
+              serializedRow[key] = serializeValue(value);
             }
-          } catch (countError) {
-            console.error("Failed to get count:", countError);
-            total = data.length;
-          }
+            return serializedRow;
+          });
 
-          const response = {
+          // Return data directly without wrapper to match DatasourceDataResponse type
+          return successResponse({
             columns: columns.map((col) => ({
               name: col.column_name,
               type: col.column_type,
@@ -227,9 +276,7 @@ export const Route = createFileRoute(
               total,
               hasMore: offset + limit < total,
             },
-          };
-
-          return successResponse(response);
+          });
         } catch (error) {
           if (error instanceof ZodError) {
             const errorMessage = error.issues.map((e) => e.message).join(", ");

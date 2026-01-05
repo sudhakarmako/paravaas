@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2, X } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,12 +12,16 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { Datasource } from "@/core/types/datasources";
-import { Loader2 } from "lucide-react";
+import {
+  useDatasourceSelectedColumns,
+  useDatasourceStore,
+} from "@/core/stores/datasource-store";
+import type { Datasource, DatasourceColumn } from "@/core/types/datasources";
 
 interface ExcelHeaderProps {
   datasource: Datasource;
   projectId: string;
+  columns: DatasourceColumn[];
 }
 
 const statusConfig = {
@@ -30,8 +34,17 @@ const statusConfig = {
 export const ExcelHeader = memo(function ExcelHeader({
   datasource,
   projectId,
+  columns,
 }: ExcelHeaderProps) {
   const status = statusConfig[datasource.status];
+  const datasourceId = String(datasource.id);
+
+  // Column selection state from zustand (only for selectedColumns)
+  const selectedColumns = useDatasourceSelectedColumns(datasourceId);
+  const { clearColumnSelection } = useDatasourceStore();
+
+  const selectedCount = selectedColumns.length;
+  const totalCount = columns.length;
 
   return (
     <div className="border-b bg-background">
@@ -97,6 +110,35 @@ export const ExcelHeader = memo(function ExcelHeader({
             </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Column selection indicator and actions */}
+        {totalCount > 0 && (
+          <div className="flex items-center gap-2">
+            {selectedCount > 0 ? (
+              <>
+                <span className="text-xs text-muted-foreground">
+                  {selectedCount} of {totalCount} columns selected
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => clearColumnSelection(datasourceId)}
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Clear
+                </Button>
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                Click column headers to select
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

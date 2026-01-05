@@ -1,11 +1,13 @@
+import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ExcelHeader } from "./excel-header";
 import { DataGrid } from "./data-grid";
 import { DataGridErrorBoundary } from "./data-grid-error-boundary";
-import { getDatasourceData } from "@/core/services/datasources";
-import { DATASOURCE_CONSTANTS } from "@/core/constants";
 import type { Datasource } from "@/core/types/datasources";
 import { Loader2 } from "lucide-react";
+import { getDatasourceData } from "@/core/services/datasources";
+import { DATASOURCE_CONSTANTS } from "@/core/constants";
+import { useDatasourceStore } from "@/core/stores/datasource-store";
 
 interface ExcelViewProps {
   datasource: Datasource;
@@ -13,7 +15,10 @@ interface ExcelViewProps {
 }
 
 export function ExcelView({ datasource, projectId }: ExcelViewProps) {
-  // Load first batch of data - uses cached data from route loader prefetch
+  const datasourceId = String(datasource.id);
+  const initializedRef = useRef(false);
+
+  // Load first batch of data using regular API
   const { data, isLoading, error } = useQuery(
     getDatasourceData(
       projectId,
@@ -23,10 +28,50 @@ export function ExcelView({ datasource, projectId }: ExcelViewProps) {
     )
   );
 
+  // Initialize zustand store with columns when data is loaded (once only)
+  if (data && data.columns.length > 0 && !initializedRef.current) {
+    const store = useDatasourceStore.getState();
+    if (!store.datasources[datasourceId]) {
+      initializedRef.current = true;
+      // Use setTimeout to avoid state update during render
+      setTimeout(() => {
+        store.initializeDatasource(
+          datasourceId,
+          data.columns,
+          data.pagination.total
+        );
+      }, 0);
+    } else {
+      initializedRef.current = true;
+    }
+  }
+
+  // Handle datasource not ready state
+  if (datasource.status !== "completed" || !datasource.duckdbTableName) {
+    return (
+      <div className="flex flex-col h-full">
+        <ExcelHeader
+          datasource={datasource}
+          projectId={projectId}
+          columns={[]}
+        />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-muted-foreground">
+            Datasource is not ready. Status: {datasource.status}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="flex flex-col h-full">
-        <ExcelHeader datasource={datasource} projectId={projectId} />
+        <ExcelHeader
+          datasource={datasource}
+          projectId={projectId}
+          columns={[]}
+        />
         <div className="flex-1 flex items-center justify-center">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -38,7 +83,6 @@ export function ExcelView({ datasource, projectId }: ExcelViewProps) {
   }
 
   if (error || !data) {
-    // Extract error message from API response
     let errorMessage = "Failed to load datasource data";
     if (error) {
       if (error instanceof Error) {
@@ -56,7 +100,11 @@ export function ExcelView({ datasource, projectId }: ExcelViewProps) {
 
     return (
       <div className="flex flex-col h-full">
-        <ExcelHeader datasource={datasource} projectId={projectId} />
+        <ExcelHeader
+          datasource={datasource}
+          projectId={projectId}
+          columns={[]}
+        />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-destructive max-w-2xl px-4 text-center">
             <p className="font-semibold mb-2">Error loading data</p>
@@ -72,29 +120,19 @@ export function ExcelView({ datasource, projectId }: ExcelViewProps) {
     );
   }
 
-  if (datasource.status !== "completed" || !datasource.duckdbTableName) {
-    return (
-      <div className="flex flex-col h-full">
-        <ExcelHeader datasource={datasource} projectId={projectId} />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-muted-foreground">
-            Datasource is not ready. Status: {datasource.status}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full bg-background">
-      <ExcelHeader datasource={datasource} projectId={projectId} />
+      <ExcelHeader
+        datasource={datasource}
+        projectId={projectId}
+        columns={data.columns}
+      />
       <div className="flex-1 overflow-hidden">
         <DataGridErrorBoundary>
           <DataGrid
             projectId={projectId}
-            datasourceId={datasource.id.toString()}
+            datasourceId={datasourceId}
             columns={data.columns}
-            initialData={data.data}
             total={data.pagination.total}
           />
         </DataGridErrorBoundary>

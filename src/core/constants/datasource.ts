@@ -1,9 +1,9 @@
 // Data grid constants
 export const DATASOURCE_CONSTANTS = {
   // Batch loading
-  BATCH_SIZE: 10_000,
+  BATCH_SIZE: 500,
   MAX_BATCH_SIZE: 50_000,
-  DEFAULT_LIMIT: 10_000,
+  DEFAULT_LIMIT: 500,
 
   // Grid rendering
   ROW_HEIGHT: 32,

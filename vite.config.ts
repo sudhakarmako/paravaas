@@ -12,12 +12,35 @@ const config = defineConfig({
     nitro(),
     // this is the plugin that enables path aliases
     viteTsConfigPaths({
-      projects: ['./tsconfig.json'],
+      projects: ["./tsconfig.json"],
     }),
     tailwindcss(),
     tanstackStart(),
     viteReact(),
   ],
-})
+  optimizeDeps: {
+    exclude: [
+      "@duckdb/node-api",
+      "@duckdb/node-bindings",
+      "@duckdb/node-bindings-darwin-arm64",
+      "@duckdb/node-bindings-darwin-x64",
+      "@duckdb/node-bindings-linux-arm64",
+      "@duckdb/node-bindings-linux-x64",
+      "@duckdb/node-bindings-win32-x64",
+    ],
+  },
+  ssr: {
+    noExternal: [],
+    external: [
+      "@duckdb/node-api",
+      "@duckdb/node-bindings",
+      "@duckdb/node-bindings-darwin-arm64",
+      "@duckdb/node-bindings-darwin-x64",
+      "@duckdb/node-bindings-linux-arm64",
+      "@duckdb/node-bindings-linux-x64",
+      "@duckdb/node-bindings-win32-x64",
+    ],
+  },
+});
 
 export default config
